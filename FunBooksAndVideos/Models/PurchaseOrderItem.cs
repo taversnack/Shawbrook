@@ -1,4 +1,6 @@
-﻿namespace FunBooksAndVideos.Models
+﻿using FunBooksAndVideos.Enums;
+
+namespace FunBooksAndVideos.Models
 {
     public class PurchaseOrderItem
     {

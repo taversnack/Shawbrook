@@ -1,4 +1,4 @@
-﻿namespace FunBooksAndVideos.Models
+﻿namespace FunBooksAndVideos.Enums
 {
     public enum MembershipType
     {
