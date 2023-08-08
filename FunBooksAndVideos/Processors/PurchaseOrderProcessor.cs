@@ -1,73 +1,97 @@
-﻿using FunBooksAndVideos.Models;
+﻿using FunBooksAndVideos.Enums;
+using FunBooksAndVideos.Models;
+using FunBooksAndVideos.Repository.Interface;
 
 namespace FunBooksAndVideos.Processors
 {
-
-    public class ProcessorOutput
-    {
-        public string ShippingSlip { set; get; }
-        public string MembershipDetails { set; get; }
-    }
-
     public class PurchaseOrderProcessor
     {
-        public ProcessorOutput ProcessPurchaseOrder(PurchaseOrder purchaseOrder)
+
+        private readonly IItemLineRepository _itemLineRepository;
+        private readonly IMembershipRepository _membershipRepository;
+
+        public PurchaseOrderProcessor() { }
+        public PurchaseOrderProcessor(IItemLineRepository itemLineRepository, IMembershipRepository membershipRepository)
         {
-            Customer customer = new Customer(purchaseOrder.CustomerId);
-
-            // Applying BR1
-            ActivateMembership(customer, purchaseOrder.Items);
-
-            // Applying BR2
-            GenerateShippingSlip(purchaseOrder);
-
-            return GetOutput(customer, purchaseOrder);
-
+            _itemLineRepository = itemLineRepository;
+            _membershipRepository = membershipRepository;
         }
 
 
-        #region Private Methods
-
-        //BR1.If the purchase order contains a membership, it has to be activated in the customer account immediately.
-        private void ActivateMembership(Customer customer, List<PurchaseOrderItem> items)
+        public void ProcessPurchaseOrder(PurchaseOrder purchaseOrder)
         {
-            foreach (var item in items)
+            // Retrieve the item lines associated with the purchase order from the database.
+            var itemLines = _itemLineRepository.GetItemLinesByOrderId(purchaseOrder.OrderId);
+
+            if (itemLines.Any(itemLine => itemLine.MembershipId != null))
             {
-                if (item.MembershipType.HasValue)
+                ActivateMembership(purchaseOrder.CustomerId, itemLines);
+            }
+
+            if (itemLines.Any(itemLine => itemLine.Product.Type == ProductType.Physical))
+            {
+                GenerateShippingSlip(purchaseOrder.OrderId);
+            }
+        }
+
+        private void ActivateMembership(int customerId, List<ItemLine> itemLines)
+        {
+            foreach (var itemLine in itemLines)
+            {
+                if (itemLine.MembershipId.HasValue)
                 {
-                    Membership membership = new Membership(item.MembershipType) {IsActivated = true};
-                    customer.Memberships.Add(membership);
+                    // Fetch the membership status data from the database based on customerId and membershipId.
+                    MembershipStatus membershipStatus = _membershipRepository.GetMembershipStatus(customerId, itemLine.MembershipId.Value);
+
+                    if (membershipStatus != null)
+                    {
+                        membershipStatus.IsActive = true;
+
+                        // Update the membership status in the database.
+                        _membershipRepository.UpdateMembershipStatus(membershipStatus);
+                    }
                 }
             }
         }
 
-        //BR2. If the purchase order contains a physical product a shipping slip has to be generated. 
-        private void GenerateShippingSlip(PurchaseOrder purchaseOrder)
+        private void GenerateShippingSlip(int orderId)
         {
-            List<PurchaseOrderItem> items = purchaseOrder.Items.Where((item) => item.Product != null).ToList();
-            if (items.Count != 0)
+           
+            var shippingSlip = new ShippingSlip
             {
-                purchaseOrder.ShippingSlip = $"Slip having {items.Count} items to be shipped";
-            }
+                OrderId = orderId,
+                CreatedAt = DateTime.UtcNow
+                // Additional shipping slip data can be added here.
+            };
+
+            // Store the shipping slip in the database or take appropriate actions.
+            SaveShippingSlipToDatabase(shippingSlip);
         }
 
-        private ProcessorOutput GetOutput(Customer customer, PurchaseOrder purchaseOrder)
+        private MembershipStatus GetMembershipStatusFromDatabase(int customerId, int membershipId)
         {
-            string membershipDetails = "";
-            customer.Memberships.ForEach((membership) =>
+            // Query the database to get the membership status for the customer and membershipId.
+            // For the sake of example, we return a mock MembershipStatus object.
+            return new MembershipStatus
             {
-                membershipDetails += $"Activated {membership.MembershipType} for customer id: {customer.Id}\n ";
-
-            });
-
-            return new ProcessorOutput()
-            {
-                ShippingSlip = purchaseOrder.ShippingSlip,
-                MembershipDetails = membershipDetails
+                CustomerId = customerId,
+                MembershipId = membershipId,
+                IsActive = false
             };
         }
 
-        #endregion
+
+        private void UpdateMembershipStatusInDatabase(MembershipStatus membershipStatus)
+        {
+            // Update the membership status in the database.
+            // For the sake of example, we do nothing in this mock method.
+        }
+
+        private void SaveShippingSlipToDatabase(ShippingSlip shippingSlip)
+        {
+            // Save the shipping slip to the database or perform other required actions.
+            // For the sake of example, we do nothing in this mock method.
+        }
 
     }
 }
